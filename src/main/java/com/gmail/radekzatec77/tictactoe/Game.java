@@ -1,115 +1,87 @@
 package com.gmail.radekzatec77.tictactoe;
 
-import com.gmail.radekzatec77.collections.Matrix;
+import com.gmail.radekzatec77.tictactoe.dao.GameStats;
+import com.gmail.radekzatec77.tictactoe.dao.PlayerStats;
+import com.gmail.radekzatec77.tictactoe.exceptions.FinishedMatchException;
+import com.gmail.radekzatec77.tictactoe.exceptions.FullColumnException;
+import com.gmail.radekzatec77.tictactoe.exceptions.FinishedGameException;
 
+/**
+ * Počítá statistiky a vyhodnocuje hru
+ */
 public class Game {
-  private int width;
-  private int height;
-  private Matrix<Stone> stones;
-  private static int WIN_COUNT = 4;
-  private final Resolver resolver;
-  private Stone lastStone = null;
-  private Stone.Color winner = null;
+  public final int matches;
+  public final Match match;
+  public final GameStats gameStats = new GameStats();
 
-  public Game(int width, int height) {
-    this.width = width;
-    this.height = height;
-    this.resolver = new Resolver(WIN_COUNT);
-    reset();
+
+  public Game(Match match, int matches) {
+    this.matches = matches;
+    this.match = match;
   }
 
   /**
-   * Width getter
-   * @return width
-   */
-  public int getWidth() {
-    return width;
-  }
-
-  public void reset() {
-    stones = new Matrix<Stone>(width, height);
-    lastStone = null;
-    winner = null;
-  }
-
-  /**
-   * Height getter
-   * @return height
-   */
-  public int getHeight() {
-    return height;
-  }
-
-  /**
-   * Set the stone on first free row in given column
-   * @param column Column to be set
-   * @param color Color to be set
-   * @return Array of coordinates
-   * @throws GameException If there is no free rows in column
-   */
-  public int[] setStone(int column, Stone.Color color) throws GameException {
-    return this.setStone(column, getFirstFreeRow(column), color);
-  }
-
-  /**
-   * Set the stone on exact coordinates
-   * @param column Column
-   * @param row Row
-   * @param color Color
-   * @return Self - chaining design pattern
-   * @throws GameException If there is already a stone on given coordinates
-   */
-  public int[] setStone(int column, int row, Stone.Color color) throws GameException {
-    if (winner != null) {
-      throw new GameException(String.format("This game is already finished, %s WON!", winner));
-    }
-
-    if (stones.get(column, row) != null) {
-      throw new GameException(String.format("Coordinates [%d, %d] already contains stone!", column, row));
-    }
-
-    stones.set(column, row, lastStone = new Stone(column, row, color));
-
-    return new int[] { column, row };
-  }
-
-  public Stone.Color getWinner() {
-    if (winner == null && lastStone != null) {
-      winner = resolver.resolve(stones, lastStone.getColumn(), lastStone.getRow());
-    }
-
-    return winner;
-  }
-
-  /**
-   * Returns stone on given coordinates
+   * Provede tah ve hře a navýší statistiky
    * @param column
-   * @param row
-   * @return Color of the stone
+   * @throws FullColumnException
+   * @throws FinishedGameException
+   * @throws FinishedMatchException
    */
-  public Stone getStone(int column, int row) {
-    return this.stones.get(column, row);
-  }
+  public void turn(int column) throws FullColumnException, FinishedGameException, FinishedMatchException {
+    if (isFinished()) { throw new FinishedGameException(); }
 
+    StoneColor onTurn = match.getPlayerOnTurn();
+    match.turn(column);
+    gameStats.incTurns(onTurn);
+
+    if (match.isFinished()) {
+      if (match.isDraw()) {
+        gameStats.incDraws();
+      }
+
+      if (match.isWinner()) {
+        gameStats.incWins(match.getWinner());
+      }
+    }
+  }
 
   /**
-   * Returns first free row of given column
-   *
-   * @param column Column
-   * @return Free row index
-   * @throws GameException If there is no free row (column is full)
+   * Vrací celkového vítěze hry nebo null
+   * @return
    */
-  private Integer getFirstFreeRow(int column) throws GameException {
-    Stone currentStone;
-    int row = 0;
-    do {
-      if (row == getHeight()) {
-        throw new GameException(String.format("Column [%s] is full", column));
+  public StoneColor getWinner() {
+    for (PlayerStats stats : gameStats.getStats()) {
+      if (stats.getWins() == matches) {
+        return stats.player;
       }
-      currentStone = getStone(column, row++);
-    } while (currentStone != null);
+    }
 
-    return row - 1;
+    return null;
   }
 
+  /**
+   * Posouvá hru na další zápas
+   * @throws FinishedGameException
+   */
+  public void nextMatch() throws FinishedGameException {
+    if (isFinished()) { throw new FinishedGameException(); }
+    gameStats.newMatch();
+    match.reset();
+  }
+
+  /**
+   * Resetuje celou hru
+   */
+  public void reset() {
+    match.reset();
+    gameStats.reset();
+  }
+
+  /**
+   * Je hra ukončena?
+   * @return
+   */
+  public boolean isFinished() {
+    return getWinner() != null;
+  }
 }
